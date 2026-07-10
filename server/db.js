@@ -3,37 +3,40 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-};
-
-const databaseName = process.env.DB_NAME || 'siva_website';
-
 let pool;
 let initError = null;
 
 export const initDb = async () => {
   try {
-    // 1. Connect without database selected
-    const connection = await mysql.createConnection(dbConfig);
+    const cloudUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
     
-    // 2. Create database if it doesn't exist
-    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\``);
-    await connection.end();
+    if (cloudUrl) {
+      // Connect directly using Railway URL
+      pool = mysql.createPool(cloudUrl);
+    } else {
+      // Local fallback
+      const dbConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+      };
+      const databaseName = process.env.DB_NAME || 'siva_website';
+      
+      const connection = await mysql.createConnection(dbConfig);
+      await connection.query(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\``);
+      await connection.end();
 
-    // 3. Initialize the actual pool connected to the database
-    pool = mysql.createPool({
-      ...dbConfig,
-      database: databaseName,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
+      pool = mysql.createPool({
+        ...dbConfig,
+        database: databaseName,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+      });
+    }
 
     const poolConnection = await pool.getConnection();
-    console.log(`Successfully connected to MySQL database: ${databaseName}`);
+    console.log('Successfully connected to MySQL database');
 
     // Create users table
     await poolConnection.query(`
